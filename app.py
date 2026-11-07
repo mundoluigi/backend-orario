@@ -11,25 +11,39 @@ def assistant():
     
     classe = data.get('classe', '').strip().upper()
     scuola = data.get('scuola', '').strip().upper()
+    user = data.get('user', '').strip()
+    pwd = data.get('pass', '').strip()
     token = data.get('token', '').strip()
     
     compiti_list = []
     debug_info = ""
     
     if any(k in query for k in ["compiti", "didup", "programmazione", "esercizi"]):
-        if not token:
-            reply = "Sessione Argo non autenticata. Incolla il token nelle impostazioni."
-            return jsonify({'reply': reply, 'compiti': []})
-            
         try:
             session = requests.Session()
             
-            # Intestazioni identiche a quelle del browser per superare il controllo di sicurezza Argo
+            # Se l'utente ha inserito un token manuale lo usiamo, altrimenti proviamo l'autenticazione via credenziali
+            active_token = token
+            if not active_token and user and pwd:
+                # Tentativo di login automatico alle API di Argo
+                login_res = session.post(
+                    "https://didattica.portaleargo.it/grest/login",
+                    json={"uid": user, "pwd": pwd, "scuola": scuola},
+                    headers={"X-Codice-Scuola": scuola, "Content-Type": "application/json"}
+                )
+                if login_res.status_code == 200:
+                    login_data = login_res.json()
+                    active_token = login_data.get('token') or login_data.get('accessToken')
+            
+            if not active_token:
+                reply = "Sessione Argo non valida o credenziali mancanti. Verifica i dati nelle impostazioni."
+                return jsonify({'reply': reply, 'compiti': []})
+
             headers = {
                 'Accept': 'application/json, text/plain, */*',
                 'Accept-Language': 'it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7',
-                'Authorization': token if token.startswith('Bearer ') else f'Bearer {token}',
-                'X-Auth-Token': token.replace('Bearer ', '').strip(),
+                'Authorization': active_token if active_token.startswith('Bearer ') else f'Bearer {active_token}',
+                'X-Auth-Token': active_token.replace('Bearer ', '').strip(),
                 'X-Codice-Scuola': scuola,
                 'Argo-Client-Version': '4.2.3',
                 'Origin': 'https://www.portaleargo.it',
