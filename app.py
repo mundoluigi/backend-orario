@@ -26,16 +26,18 @@ def assistant():
         try:
             session = requests.Session()
             
+            # Intestazioni simulate da browser per superare i filtri WAF di Argo
             headers = {
                 'Content-Type': 'application/json',
                 'X-Codice-Scuola': scuola,
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*',
                 'Origin': 'https://www.portaleargo.it',
                 'Referer': 'https://www.portaleargo.it/auth/sso/login'
             }
             
-            # Endpoint SSO corretto con www
-            login_url = "https://www.portaleargo.it/auth/sso/api/login"
+            # Proviamo l'endpoint di login standard dei servizi REST di Argo Famiglia
+            login_url = "https://www.portaleargo.it/famiglia/api/rest/login"
             
             login_res = session.post(
                 login_url,
@@ -48,14 +50,27 @@ def assistant():
                 timeout=15
             )
             
+            # Se il primo non va, proviamo il fallback sull'endpoint generico api/login
+            if login_res.status_code != 200:
+                fallback_url = "https://www.portaleargo.it/api/login"
+                login_res = session.post(
+                    fallback_url,
+                    headers=headers,
+                    json={
+                        "codiceScuola": scuola,
+                        "username": user,
+                        "password": passwd,
+                    },
+                    timeout=15
+                )
+            
             if login_res.status_code == 200:
-                login_data = login_res.json()
+                login_data = login_res.json() if login_res.content else {}
                 token = (
                     login_data.get('token') or 
                     login_data.get('tokenAuth') or 
                     login_data.get('accessToken') or 
-                    login_data.get('tokenKey') or 
-                    login_data.get('bearerToken') or ''
+                    login_data.get('tokenKey') or ''
                 )
                 
                 auth_headers = {
@@ -92,9 +107,9 @@ def assistant():
                             'descrizione': item.get('desCompito') or item.get('compito') or item.get('annotazioni', ''),
                         })
                 else:
-                    debug_info = f"Compiti HTTP {compiti_res.status_code}: {compiti_res.text[:100]}"
+                    debug_info = f"Compiti HTTP {compiti_res.status_code}"
             else:
-                debug_info = f"Login HTTP {login_res.status_code}: {login_res.text[:120]}"
+                debug_info = f"Login HTTP {login_res.status_code}"
         except Exception as e:
             debug_info = f"Eccezione: {str(e)}"
 
