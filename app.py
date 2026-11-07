@@ -18,24 +18,20 @@ def assistant():
     
     if any(k in query for k in ["compiti", "didup", "programmazione", "esercizi"]):
         if not token:
-            reply = "Sessione Argo non autenticata. Incolla il token nelle impostazioni."
+            reply = "Sessione Argo non autenticata. Incolla l'access_token nelle impostazioni dell'app."
             return jsonify({'reply': reply, 'compiti': []})
             
         try:
             session = requests.Session()
             
-            # Pulisce il token da eventuali spazi o prefissi "Bearer " ripetuti
-            clean_token = token.replace('Bearer', '').replace('bearer', '').strip()
+            clean_token = token.replace('Bearer', '').strip()
             
+            # Intestazioni standard accettate dal gateway Argo
             headers = {
                 'Accept': 'application/json, text/plain, */*',
-                'Accept-Language': 'it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7',
                 'Authorization': f'Bearer {clean_token}',
-                'X-Auth-Token': clean_token,
-                'X-Codice-Scuola': scuola,
-                'Argo-Client-Version': '4.2.3',
-                'Origin': 'https://www.portaleargo.it',
-                'Referer': 'https://www.portaleargo.it/',
+                'x-auth-token': clean_token,
+                'x-cod-min': scuola,
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             }
             
