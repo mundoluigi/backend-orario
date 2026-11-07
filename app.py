@@ -24,16 +24,17 @@ def assistant():
         try:
             session = requests.Session()
             
-            # Pulisce il token e formatta correttamente il Bearer
             clean_token = token.replace('Bearer', '').replace('bearer', '').strip()
             
+            # Intestazioni complete richieste dal gateway Argo per superare il controllo 458
             headers = {
                 'Accept': 'application/json, text/plain, */*',
                 'Accept-Language': 'it-IT,it;q=0.9',
                 'Authorization': f'Bearer {clean_token}',
-                'X-Auth-Token': clean_token,
-                'X-Codice-Scuola': scuola,
-                'Argo-Client-Version': '4.2.3',
+                'x-auth-token': clean_token,
+                'x-cod-min': scuola,
+                'os-type': 'WEB',
+                'argo-client-version': '4.2.3',
                 'Origin': 'https://www.portaleargo.it',
                 'Referer': 'https://www.portaleargo.it/',
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
