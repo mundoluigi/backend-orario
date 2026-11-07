@@ -30,12 +30,12 @@ def assistant():
                 'Content-Type': 'application/json',
                 'X-Codice-Scuola': scuola,
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Origin': 'https://portaleargo.it',
-                'Referer': 'https://portaleargo.it/auth/sso/login'
+                'Origin': 'https://www.portaleargo.it',
+                'Referer': 'https://www.portaleargo.it/auth/sso/login'
             }
             
-            # Endpoint SSO corretto ricavato dal portale
-            login_url = "https://portaleargo.it/auth/sso/api/login"
+            # Endpoint SSO corretto con www
+            login_url = "https://www.portaleargo.it/auth/sso/api/login"
             
             login_res = session.post(
                 login_url,
@@ -72,7 +72,7 @@ def assistant():
                 future = now + datetime.timedelta(days=30)
                 
                 compiti_res = session.get(
-                    f"https://portaleargo.it/famiglia/api/rest/v2/compiti-assegnati?da={past.isoformat()}&a={future.isoformat()}",
+                    f"https://www.portaleargo.it/famiglia/api/rest/v2/compiti-assegnati?da={past.isoformat()}&a={future.isoformat()}",
                     headers=auth_headers,
                     timeout=15
                 )
@@ -94,7 +94,6 @@ def assistant():
                 else:
                     debug_info = f"Compiti HTTP {compiti_res.status_code}: {compiti_res.text[:100]}"
             else:
-                # Stampiamo il testo esatto dell'errore restituito da Argo nel login
                 debug_info = f"Login HTTP {login_res.status_code}: {login_res.text[:120]}"
         except Exception as e:
             debug_info = f"Eccezione: {str(e)}"
