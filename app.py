@@ -29,54 +29,39 @@ def assistant():
             headers = {
                 'Content-Type': 'application/json',
                 'X-Codice-Scuola': scuola,
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36',
-                'Accept': 'application/json, text/plain, */*'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Origin': 'https://portaleargo.it',
+                'Referer': 'https://portaleargo.it/auth/sso/login'
             }
             
-            # Endpoint reali di autenticazione Argo
-            login_urls = [
-                "https://www.portaleargo.it/auth/api/login",
-                "https://www.portaleargo.it/famiglia/api/rest/login",
-                "https://www.portaleargo.it/api/login"
-            ]
+            # Endpoint SSO corretto ricavato dal portale
+            login_url = "https://portaleargo.it/auth/sso/api/login"
             
-            login_res = None
-            for url in login_urls:
-                try:
-                    res = session.post(
-                        url,
-                        headers=headers,
-                        json={
-                            "codiceScuola": scuola,
-                            "username": user,
-                            "password": passwd,
-                        },
-                        timeout=10
-                    )
-                    if res.status_code != 404:
-                        login_res = res
-                        if res.status_code == 200:
-                            break
-                except:
-                    continue
+            login_res = session.post(
+                login_url,
+                headers=headers,
+                json={
+                    "codiceScuola": scuola,
+                    "username": user,
+                    "password": passwd,
+                },
+                timeout=15
+            )
             
-            if login_res is None or login_res.status_code != 200:
-                status = login_res.status_code if login_res else "404"
-                text_err = login_res.text[:100] if login_res else "Nessuna risposta"
-                debug_info = f"Login Argo HTTP {status}: {text_err}"
-            else:
+            if login_res.status_code == 200:
                 login_data = login_res.json()
                 token = (
                     login_data.get('token') or 
                     login_data.get('tokenAuth') or 
                     login_data.get('accessToken') or 
-                    login_data.get('tokenKey') or ''
+                    login_data.get('tokenKey') or 
+                    login_data.get('bearerToken') or ''
                 )
                 
                 auth_headers = {
                     'X-Codice-Scuola': scuola,
                     'Accept': 'application/json, text/plain, */*',
-                    'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
                 }
                 if token:
                     auth_headers['X-Auth-Token'] = token
@@ -87,7 +72,7 @@ def assistant():
                 future = now + datetime.timedelta(days=30)
                 
                 compiti_res = session.get(
-                    f"https://www.portaleargo.it/famiglia/api/rest/v2/compiti-assegnati?da={past.isoformat()}&a={future.isoformat()}",
+                    f"https://portaleargo.it/famiglia/api/rest/v2/compiti-assegnati?da={past.isoformat()}&a={future.isoformat()}",
                     headers=auth_headers,
                     timeout=15
                 )
@@ -108,6 +93,9 @@ def assistant():
                         })
                 else:
                     debug_info = f"Compiti HTTP {compiti_res.status_code}: {compiti_res.text[:100]}"
+            else:
+                # Stampiamo il testo esatto dell'errore restituito da Argo nel login
+                debug_info = f"Login HTTP {login_res.status_code}: {login_res.text[:120]}"
         except Exception as e:
             debug_info = f"Eccezione: {str(e)}"
 
