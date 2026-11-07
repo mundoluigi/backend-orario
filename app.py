@@ -26,7 +26,6 @@ def assistant():
         try:
             session = requests.Session()
             
-            # Intestazioni standard identiche all'app didUP
             base_headers = {
                 'Content-Type': 'application/json',
                 'X-Codice-Scuola': scuola,
@@ -34,19 +33,36 @@ def assistant():
                 'Host': 'www.portaleargo.it'
             }
             
-            # 1. Login su Argo usando il dominio WWW
-            login_res = session.post(
+            # Proviamo l'endpoint di autenticazione alternativo di Argo DidUp
+            login_urls = [
                 "https://www.portaleargo.it/auth/sso/api/login",
-                headers=base_headers,
-                json={
-                    "codiceScuola": scuola,
-                    "username": user,
-                    "password": passwd,
-                },
-                timeout=15
-            )
+                "https://www.portaleargo.it/famiglia/api/rest/login",
+                "https://www.portaleargo.it/api/v1/login"
+            ]
             
-            if login_res.status_code == 200:
+            login_res = None
+            for url in login_urls:
+                try:
+                    res = session.post(
+                        url,
+                        headers=base_headers,
+                        json={
+                            "codiceScuola": scuola,
+                            "username": user,
+                            "password": passwd,
+                        },
+                        timeout=10
+                    )
+                    if res.status_code != 404:
+                        login_res = res
+                        break
+                except:
+                    continue
+            
+            if login_res is None or login_res.status_code != 200:
+                status_code = login_res.status_code if login_res else "404/Timeout"
+                debug_info = f"Login fallito su tutti gli endpoint (Ultimo HTTP {status_code})"
+            else:
                 login_data = login_res.json()
                 token = (
                     login_data.get('token') or 
@@ -69,7 +85,6 @@ def assistant():
                 past = now - datetime.timedelta(days=15)
                 future = now + datetime.timedelta(days=30)
                 
-                # 2. Chiamata API compiti
                 compiti_res = session.get(
                     f"https://www.portaleargo.it/famiglia/api/rest/v2/compiti-assegnati?da={past.isoformat()}&a={future.isoformat()}",
                     headers=auth_headers,
@@ -92,8 +107,6 @@ def assistant():
                         })
                 else:
                     debug_info = f"HTTP {compiti_res.status_code} su recupero compiti"
-            else:
-                debug_info = f"Login fallito (HTTP {login_res.status_code})"
         except Exception as e:
             debug_info = f"Eccezione: {str(e)}"
 
@@ -102,7 +115,7 @@ def assistant():
             testo_compiti = ", ".join([f"{c['materia']}: {c['descrizione']}" for c in compiti_list[:3]])
             reply = f"Ho trovato {len(compiti_list)} compiti su didUP. Tra cui: {testo_compiti}"
         else:
-            reply = f"Nessun compito trovato per lo studente nei prossimi giorni. ({debug_info})"
+            reply = f"Nessun compito trovato. {debug_info}"
     else:
         info_classe = f" per la classe {classe}" if classe else ""
         reply = f"Comando ricevuto{info_classe}: {query}"
