@@ -18,54 +18,37 @@ def assistant():
     
     if any(k in query for k in ["compiti", "didup", "programmazione", "esercizi"]):
         if not token:
-            reply = "Sessione Argo non autenticata. Incolla l'access_token nelle impostazioni dell'app."
+            reply = "Sessione Argo non autenticata."
             return jsonify({'reply': reply, 'compiti': []})
             
         try:
             session = requests.Session()
-            
             clean_token = token.replace('Bearer', '').replace('bearer', '').strip()
             
-            # Intestazioni complete richieste dal gateway Argo per superare il controllo 458
+            # Usiamo l'endpoint alternativo della bacheca o della agenda se la dashboard fa i capricci
             headers = {
                 'Accept': 'application/json, text/plain, */*',
-                'Accept-Language': 'it-IT,it;q=0.9',
                 'Authorization': f'Bearer {clean_token}',
                 'x-auth-token': clean_token,
                 'x-cod-min': scuola,
                 'os-type': 'WEB',
                 'argo-client-version': '4.2.3',
-                'Origin': 'https://www.portaleargo.it',
-                'Referer': 'https://www.portaleargo.it/',
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             }
             
-            dashboard_url = "https://didattica.portaleargo.it/famiglia/api/dashboard/dashboard"
+            # Proviamo l'endpoint specifico dei compiti assegnati
+            url = f"https://didattica.portaleargo.it/famiglia/api/compiti/compiti"
             
-            res = session.get(
-                dashboard_url,
-                headers=headers,
-                timeout=15
-            )
+            res = session.get(url, headers=headers, timeout=15)
             
             if res.status_code == 200:
                 decoded = res.json()
-                items = []
-                if isinstance(decoded, dict):
-                    items = (
-                        decoded.get('compitiAssegnati', []) or 
-                        decoded.get('compiti', []) or 
-                        decoded.get('dati', {}).get('compitiAssegnati', []) or
-                        decoded.get('agenda', [])
-                    )
-                elif isinstance(decoded, list):
-                    items = decoded
-                    
+                items = decoded if isinstance(decoded, list) else decoded.get('dati', []) or decoded.get('compitiAssegnati', [])
                 for item in items:
                     compiti_list.append({
-                        'data': item.get('datGiorno') or item.get('datCompito') or item.get('data') or '',
-                        'materia': item.get('desMateria') or item.get('materia') or 'Materia',
-                        'descrizione': item.get('desCompito') or item.get('compito') or item.get('descrizione') or 'Compito',
+                        'data': item.get('datGiorno') or item.get('datCompito') or '',
+                        'materia': item.get('desMateria') or 'Materia',
+                        'descrizione': item.get('desCompito') or 'Compito',
                     })
             else:
                 debug_info = f"HTTP {res.status_code}"
