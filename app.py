@@ -29,25 +29,42 @@ def assistant():
             headers = {
                 'Content-Type': 'application/json',
                 'X-Codice-Scuola': scuola,
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36',
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36',
                 'Accept': 'application/json, text/plain, */*'
             }
             
-            # Endpoint ufficiale del portale famiglia Argo
-            login_url = "https://www.portaleargo.it/auth/sso/api/login"
+            # Endpoint reali di autenticazione Argo
+            login_urls = [
+                "https://www.portaleargo.it/auth/api/login",
+                "https://www.portaleargo.it/famiglia/api/rest/login",
+                "https://www.portaleargo.it/api/login"
+            ]
             
-            login_res = session.post(
-                login_url,
-                headers=headers,
-                json={
-                    "codiceScuola": scuola,
-                    "username": user,
-                    "password": passwd,
-                },
-                timeout=15
-            )
+            login_res = None
+            for url in login_urls:
+                try:
+                    res = session.post(
+                        url,
+                        headers=headers,
+                        json={
+                            "codiceScuola": scuola,
+                            "username": user,
+                            "password": passwd,
+                        },
+                        timeout=10
+                    )
+                    if res.status_code != 404:
+                        login_res = res
+                        if res.status_code == 200:
+                            break
+                except:
+                    continue
             
-            if login_res.status_code == 200:
+            if login_res is None or login_res.status_code != 200:
+                status = login_res.status_code if login_res else "404"
+                text_err = login_res.text[:100] if login_res else "Nessuna risposta"
+                debug_info = f"Login Argo HTTP {status}: {text_err}"
+            else:
                 login_data = login_res.json()
                 token = (
                     login_data.get('token') or 
@@ -91,8 +108,6 @@ def assistant():
                         })
                 else:
                     debug_info = f"Compiti HTTP {compiti_res.status_code}: {compiti_res.text[:100]}"
-            else:
-                debug_info = f"Login Argo HTTP {login_res.status_code}: {login_res.text[:100]}"
         except Exception as e:
             debug_info = f"Eccezione: {str(e)}"
 
