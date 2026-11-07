@@ -26,43 +26,28 @@ def assistant():
         try:
             session = requests.Session()
             
-            base_headers = {
+            headers = {
                 'Content-Type': 'application/json',
                 'X-Codice-Scuola': scuola,
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Mobile Safari/537.36',
-                'Host': 'www.portaleargo.it'
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36',
+                'Accept': 'application/json, text/plain, */*'
             }
             
-            # Proviamo l'endpoint di autenticazione alternativo di Argo DidUp
-            login_urls = [
-                "https://www.portaleargo.it/auth/sso/api/login",
-                "https://www.portaleargo.it/famiglia/api/rest/login",
-                "https://www.portaleargo.it/api/v1/login"
-            ]
+            # Endpoint ufficiale del portale famiglia Argo
+            login_url = "https://www.portaleargo.it/auth/sso/api/login"
             
-            login_res = None
-            for url in login_urls:
-                try:
-                    res = session.post(
-                        url,
-                        headers=base_headers,
-                        json={
-                            "codiceScuola": scuola,
-                            "username": user,
-                            "password": passwd,
-                        },
-                        timeout=10
-                    )
-                    if res.status_code != 404:
-                        login_res = res
-                        break
-                except:
-                    continue
+            login_res = session.post(
+                login_url,
+                headers=headers,
+                json={
+                    "codiceScuola": scuola,
+                    "username": user,
+                    "password": passwd,
+                },
+                timeout=15
+            )
             
-            if login_res is None or login_res.status_code != 200:
-                status_code = login_res.status_code if login_res else "404/Timeout"
-                debug_info = f"Login fallito su tutti gli endpoint (Ultimo HTTP {status_code})"
-            else:
+            if login_res.status_code == 200:
                 login_data = login_res.json()
                 token = (
                     login_data.get('token') or 
@@ -74,8 +59,7 @@ def assistant():
                 auth_headers = {
                     'X-Codice-Scuola': scuola,
                     'Accept': 'application/json, text/plain, */*',
-                    'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)',
-                    'Host': 'www.portaleargo.it'
+                    'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36',
                 }
                 if token:
                     auth_headers['X-Auth-Token'] = token
@@ -106,7 +90,9 @@ def assistant():
                             'descrizione': item.get('desCompito') or item.get('compito') or item.get('annotazioni', ''),
                         })
                 else:
-                    debug_info = f"HTTP {compiti_res.status_code} su recupero compiti"
+                    debug_info = f"Compiti HTTP {compiti_res.status_code}: {compiti_res.text[:100]}"
+            else:
+                debug_info = f"Login Argo HTTP {login_res.status_code}: {login_res.text[:100]}"
         except Exception as e:
             debug_info = f"Eccezione: {str(e)}"
 
