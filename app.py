@@ -18,7 +18,7 @@ def assistant():
     
     if any(k in query for k in ["compiti", "didup", "programmazione", "esercizi"]):
         if not token:
-            return jsonify({'reply': "Token di sessione DidUP mancante. Esegui il login nelle impostazioni dell'app.", 'compiti': []})
+            return jsonify({'reply': "Token di sessione DidUP mancante. Esegui il login automatico nelle impostazioni dell'app.", 'compiti': []})
             
         try:
             session = requests.Session()
@@ -82,4 +82,5 @@ def assistant():
     })
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
