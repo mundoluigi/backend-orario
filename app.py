@@ -1,15 +1,47 @@
-from flask import Flask, request, jsonify
-import requests
+from flask import Flask, request, jsonify, send_file
 import os
+import requests
+import pandas as pd
+import io
 
 app = Flask(__name__)
+
+@app.route('/', methods=['POST'])
+def genera_orario():
+    try:
+        classe = request.form.get('classe', '').strip().upper()
+        file = request.files.get('file')
+        
+        if not file or not classe:
+            return jsonify({'error': 'File o classe mancanti'}), 400
+            
+        # Legge il PDF o elabora il file ricevuto
+        # (Qui inserisci la logica di parsing del tuo generatore Excel esistente)
+        
+        # Esempio di generazione file Excel di risposta
+        df = pd.DataFrame({
+            'Classe': [classe],
+            'Stato': ['Orario generato con successo via Render']
+        })
+        
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name=f'Orario {classe}')
+        output.seek(0)
+        
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=f'Orario_Classe_{classe}.xlsx'
+        )
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/assistant', methods=['POST'])
 def assistant():
     data = request.json or {}
     query = data.get('query', '').lower()
-    
-    classe = data.get('classe', '').strip().upper()
     scuola = data.get('scuola', '').strip().upper()
     token = data.get('token', '').strip()
     
@@ -18,7 +50,7 @@ def assistant():
     
     if any(k in query for k in ["compiti", "didup", "programmazione", "esercizi"]):
         if not token:
-            return jsonify({'reply': "Token di sessione DidUP mancante. Esegui il login automatico nelle impostazioni dell'app.", 'compiti': []})
+            return jsonify({'reply': "Token di sessione DidUP mancante. Esegui il login nelle impostazioni.", 'compiti': []})
             
         try:
             session = requests.Session()
@@ -26,60 +58,34 @@ def assistant():
             
             headers = {
                 'Accept': 'application/json, text/plain, */*',
-                'Accept-Language': 'it-IT,it;q=0.9',
                 'Authorization': f'Bearer {clean_token}',
                 'x-auth-token': clean_token,
                 'x-cod-min': scuola if scuola else 'SG18119',
                 'os-type': 'WEB',
                 'argo-client-version': '4.2.3',
-                'Origin': 'https://www.portaleargo.it',
-                'Referer': 'https://www.portaleargo.it/',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
             }
             
-            dashboard_url = "https://didattica.portaleargo.it/famiglia/api/dashboard/dashboard"
-            
-            res = session.get(dashboard_url, headers=headers, timeout=15)
-            
+            res = session.get("https://didattica.portaleargo.it/famiglia/api/dashboard/dashboard", headers=headers, timeout=15)
             if res.status_code == 200:
                 decoded = res.json()
-                items = []
-                if isinstance(decoded, dict):
-                    items = (
-                        decoded.get('compitiAssegnati', []) or 
-                        decoded.get('compiti', []) or 
-                        decoded.get('dati', {}).get('compitiAssegnati', []) or
-                        decoded.get('agenda', [])
-                    )
-                elif isinstance(decoded, list):
-                    items = decoded
-                    
+                items = decoded.get('compitiAssegnati', []) or decoded.get('agenda', [])
                 for item in items:
                     compiti_list.append({
-                        'data': item.get('datGiorno') or item.get('datCompito') or item.get('data') or '',
-                        'materia': item.get('desMateria') or item.get('materia') or 'Materia',
-                        'descrizione': item.get('desCompito') or item.get('compito') or item.get('descrizione') or 'Compito',
+                        'materia': item.get('desMateria', 'Materia'),
+                        'descrizione': item.get('desCompito', 'Compito'),
                     })
             else:
                 debug_info = f"HTTP {res.status_code}"
-                
         except Exception as e:
-            debug_info = f"Eccezione: {str(e)}"
+            debug_info = str(e)
 
-    if "compiti" in query or "didup" in query:
-        if compiti_list:
-            testo_compiti = ", ".join([f"{c['materia']}: {c['descrizione']}" for c in compiti_list[:3]])
-            reply = f"Ho trovato {len(compiti_list)} compiti su didUP. Tra cui: {testo_compiti}"
-        else:
-            reply = f"Nessun compito trovato. Errore API Argo ({debug_info})"
+    if compiti_list:
+        reply = f"Ho trovato {len(compiti_list)} compiti su didUP."
     else:
-        info_classe = f" per la classe {classe}" if classe else ""
-        reply = f"Comando ricevuto{info_classe}: {query}"
+        reply = f"Nessun compito trovato o errore Argo ({debug_info})."
 
-    return jsonify({
-        'reply': reply,
-        'compiti': compiti_list
-    })
+    return jsonify({'reply': reply, 'compiti': compiti_list})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
