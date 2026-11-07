@@ -2,15 +2,17 @@ from flask import Flask, request, jsonify
 import requests
 import datetime
 import os
+import socket
+from urllib3.util.connection import create_connection
 
 app = Flask(__name__)
 
+# Forza l'uso di socket sicuri se necessario
 @app.route('/assistant', methods=['POST'])
 def assistant():
     data = request.json or {}
     query = data.get('query', '').lower()
     
-    # Prende i dati inviati dal singolo smartphone dell'utente
     classe = data.get('classe', '').strip().upper()
     scuola = data.get('scuola', '').strip().upper()
     user = data.get('user', '').strip()
@@ -19,7 +21,6 @@ def assistant():
     compiti_list = []
     debug_info = ""
     
-    # Se la query riguarda i compiti o didUP
     if any(k in query for k in ["compiti", "didup", "programmazione", "esercizi"]):
         if not scuola or not user or not passwd:
             reply = "Credenziali didUP non trovate. Inserisci Scuola, Utente e Password nel menu Impostazioni dell'app."
@@ -28,19 +29,20 @@ def assistant():
         try:
             session = requests.Session()
             
-            # Autenticazione dinamica su Argo con le credenziali dello studente
+            # Tentativo di login con timeout e gestione pulita
             login_res = session.post(
                 "https://portaleargo.it/auth/sso/api/login",
                 headers={
                     'Content-Type': 'application/json',
                     'X-Codice-Scuola': scuola,
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
                 },
                 json={
                     "codiceScuola": scuola,
                     "username": user,
                     "password": passwd,
                 },
-                timeout=10
+                timeout=15
             )
             
             if login_res.status_code == 200:
@@ -55,12 +57,12 @@ def assistant():
                 headers = {
                     'X-Codice-Scuola': scuola,
                     'Accept': 'application/json, text/plain, */*',
+                    'User-Agent': 'Mozilla/5.0'
                 }
                 if token:
                     headers['X-Auth-Token'] = token
                     headers['Authorization'] = f'Bearer {token}'
                     
-                # Cerca i compiti da 30 giorni fa a 30 giorni in avanti
                 now = datetime.date.today()
                 past = now - datetime.timedelta(days=30)
                 future = now + datetime.timedelta(days=30)
@@ -68,13 +70,11 @@ def assistant():
                 compiti_res = session.get(
                     f"https://portaleargo.it/famiglia/api/rest/v2/compiti-assegnati?da={past.isoformat()}&a={future.isoformat()}",
                     headers=headers,
-                    timeout=10
+                    timeout=15
                 )
                 
                 if compiti_res.status_code == 200:
                     decoded = compiti_res.json()
-                    debug_info = f"RAW: {str(decoded)[:120]}"
-                    
                     items = []
                     if isinstance(decoded, dict):
                         items = decoded.get('dati', []) or decoded.get('compiti', []) or decoded.get('compitiAssegnati', [])
@@ -90,16 +90,16 @@ def assistant():
                 else:
                     debug_info = f"Errore Compiti HTTP {compiti_res.status_code}"
             else:
-                debug_info = f"Login fallito. Verificare le credenziali (HTTP {login_res.status_code})"
+                debug_info = f"Login fallito. Credenziali errate o scuola non valida (HTTP {login_res.status_code})"
         except Exception as e:
-            debug_info = f"Eccezione: {str(e)}"
+            debug_info = f"Errore di rete/DNS: {str(e)}"
 
     if "compiti" in query or "didup" in query:
         if compiti_list:
             testo_compiti = ", ".join([f"{c['materia']}: {c['descrizione']}" for c in compiti_list[:3]])
             reply = f"Ho trovato {len(compiti_list)} compiti su didUP. Tra cui: {testo_compiti}"
         else:
-            reply = f"Nessun compito trovato per lo studente. {debug_info}"
+            reply = f"Nessun compito trovato. {debug_info}"
     else:
         info_classe = f" per la classe {classe}" if classe else ""
         reply = f"Comando ricevuto{info_classe}: {query}"
