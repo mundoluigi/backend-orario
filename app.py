@@ -18,22 +18,25 @@ def assistant():
     
     if any(k in query for k in ["compiti", "didup", "programmazione", "esercizi"]):
         if not token:
-            reply = "Sessione Argo non autenticata. Incolla il token di sessione nelle impostazioni dell'app."
+            reply = "Sessione Argo non autenticata. Incolla il token nelle impostazioni."
             return jsonify({'reply': reply, 'compiti': []})
             
         try:
             session = requests.Session()
             
-            # Intestazioni con il token corretto estratto dai DevTools
+            # Intestazioni identiche a quelle del browser per superare il controllo di sicurezza Argo
             headers = {
-                'X-Codice-Scuola': scuola,
                 'Accept': 'application/json, text/plain, */*',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept-Language': 'it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7',
                 'Authorization': token if token.startswith('Bearer ') else f'Bearer {token}',
-                'X-Auth-Token': token.replace('Bearer ', '').strip()
+                'X-Auth-Token': token.replace('Bearer ', '').strip(),
+                'X-Codice-Scuola': scuola,
+                'Argo-Client-Version': '4.2.3',
+                'Origin': 'https://www.portaleargo.it',
+                'Referer': 'https://www.portaleargo.it/',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             }
             
-            # Endpoint ufficiale della dashboard di Argo DidUp
             dashboard_url = "https://didattica.portaleargo.it/famiglia/api/dashboard/dashboard"
             
             res = session.get(
@@ -44,10 +47,8 @@ def assistant():
             
             if res.status_code == 200:
                 decoded = res.json()
-                # Cerchiamo i compiti all'interno della risposta della dashboard
                 items = []
                 if isinstance(decoded, dict):
-                    # Argo spesso inserisce i compiti nella sezione bacheca, agenda o compiti assegnati della dashboard
                     items = (
                         decoded.get('compitiAssegnati', []) or 
                         decoded.get('compiti', []) or 
@@ -64,7 +65,7 @@ def assistant():
                         'descrizione': item.get('desCompito') or item.get('compito') or item.get('descrizione') or 'Compito',
                     })
             else:
-                debug_info = f"Errore API Argo (HTTP {res.status_code})"
+                debug_info = f"HTTP {res.status_code}"
                 
         except Exception as e:
             debug_info = f"Eccezione: {str(e)}"
@@ -74,7 +75,7 @@ def assistant():
             testo_compiti = ", ".join([f"{c['materia']}: {c['descrizione']}" for c in compiti_list[:3]])
             reply = f"Ho trovato {len(compiti_list)} compiti su didUP. Tra cui: {testo_compiti}"
         else:
-            reply = f"Nessun compito trovato o token non valido. {debug_info}"
+            reply = f"Nessun compito trovato. Errore API Argo ({debug_info})"
     else:
         info_classe = f" per la classe {classe}" if classe else ""
         reply = f"Comando ricevuto{info_classe}: {query}"
